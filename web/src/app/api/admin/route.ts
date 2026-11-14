@@ -141,14 +141,14 @@ export async function POST(req: NextRequest) {
       message: "Authentication successful",
       token: sessionToken,
     });
-    setSessionCookie(res, sessionToken);
+    setSessionCookie(res, sessionToken, req);
     return res;
   }
 
   // 4. Handle Logout Action
   if (action === "logout") {
     const res = NextResponse.json({ success: true, message: "Logged out" });
-    clearSessionCookie(res);
+    clearSessionCookie(res, req);
     return res;
   }
 

@@ -102,9 +102,18 @@ export default function AdminPage() {
     setMounted(true);
   }, []);
 
+  const getAuthHeaders = (extra?: Record<string, string>): Record<string, string> => {
+    const headers: Record<string, string> = { ...extra };
+    if (typeof window !== "undefined") {
+      const token = localStorage.getItem("openseed_admin_token");
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+    }
+    return headers;
+  };
+
   const fetchTorrents = async () => {
     try {
-      const res = await fetch("/api/stats?live=true");
+      const res = await fetch("/api/stats?live=true", { headers: getAuthHeaders() });
       if (res.ok) {
         const data = await res.json();
         setTorrents(data.torrents || []);
@@ -118,7 +127,7 @@ export default function AdminPage() {
   const fetchUpstreamReleases = async () => {
     setCheckingReleases(true);
     try {
-      const res = await fetch("/api/releases");
+      const res = await fetch("/api/releases", { headers: getAuthHeaders() });
       if (res.ok) {
         const json = await res.json();
         setReleases(json.releases || []);
@@ -132,7 +141,7 @@ export default function AdminPage() {
 
   const fetchGluetun = async () => {
     try {
-      const res = await fetch("/api/admin");
+      const res = await fetch("/api/admin", { headers: getAuthHeaders() });
       if (res.ok) {
         const json = await res.json();
         if (json.gluetun) setGluetun(json.gluetun);
@@ -146,7 +155,7 @@ export default function AdminPage() {
     try {
       const res = await fetch("/api/admin", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ action: "db-status" }),
       });
       if (res.ok) {
@@ -161,7 +170,7 @@ export default function AdminPage() {
   const fetchLogs = async () => {
     setFetchingLogs(true);
     try {
-      const res = await fetch("/api/logs?limit=50");
+      const res = await fetch("/api/logs?limit=50", { headers: getAuthHeaders() });
       if (res.ok) {
         const json = await res.json();
         setLogs(json.logs || []);
@@ -188,9 +197,9 @@ export default function AdminPage() {
     }
   };
 
-  // Initial authentication check on load (using HttpOnly cookie or Cloudflare header)
+  // Initial authentication check on load (using HttpOnly cookie, Bearer token, or Cloudflare header)
   useEffect(() => {
-    fetch("/api/admin", { method: "GET" })
+    fetch("/api/admin", { method: "GET", headers: getAuthHeaders() })
       .then(async (res) => {
         if (res.ok) {
           const json = await res.json();
@@ -241,6 +250,9 @@ export default function AdminPage() {
       if (res.ok && json.authenticated) {
         setAuthed(true);
         if (json.email) setUserEmail(json.email);
+        if (json.token) {
+          localStorage.setItem("openseed_admin_token", json.token);
+        }
         setPassword("");
         loadAllClusterData();
       } else {
@@ -257,12 +269,13 @@ export default function AdminPage() {
     try {
       await fetch("/api/admin", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ action: "logout" }),
       });
     } catch {
       // Ignore
     } finally {
+      localStorage.removeItem("openseed_admin_token");
       setAuthed(false);
       setUserEmail(null);
       setTorrents([]);
@@ -279,7 +292,7 @@ export default function AdminPage() {
     try {
       const res = await fetch("/api/admin", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ action: "db-sync" }),
       });
       if (res.ok) {
@@ -311,6 +324,7 @@ export default function AdminPage() {
 
       const res = await fetch("/api/admin", {
         method: "POST",
+        headers: getAuthHeaders(),
         body: formData,
       });
 
@@ -337,7 +351,7 @@ export default function AdminPage() {
     try {
       await fetch("/api/admin", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ action, hash, deleteFiles }),
       });
       fetchTorrents();

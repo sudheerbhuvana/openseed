@@ -208,14 +208,19 @@ export function verifyAdminRequest(req: NextRequest): AuthVerificationResult {
 }
 
 /**
- * Sets the HttpOnly session cookie on the given NextResponse
+ * Sets the HttpOnly session cookie on the given NextResponse.
+ * Only flags 'secure: true' if the request was made over HTTPS, allowing local HTTP homelab access.
  */
-export function setSessionCookie(res: NextResponse, token: string): void {
+export function setSessionCookie(res: NextResponse, token: string, req?: NextRequest): void {
+  const isHttps = req
+    ? req.nextUrl.protocol === "https:" || req.headers.get("x-forwarded-proto") === "https"
+    : false;
+
   res.cookies.set({
     name: SESSION_COOKIE_NAME,
     value: token,
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: isHttps,
     sameSite: "lax",
     path: "/",
     maxAge: SESSION_MAX_AGE_SECONDS,
@@ -225,12 +230,16 @@ export function setSessionCookie(res: NextResponse, token: string): void {
 /**
  * Clears the session cookie (for logout)
  */
-export function clearSessionCookie(res: NextResponse): void {
+export function clearSessionCookie(res: NextResponse, req?: NextRequest): void {
+  const isHttps = req
+    ? req.nextUrl.protocol === "https:" || req.headers.get("x-forwarded-proto") === "https"
+    : false;
+
   res.cookies.set({
     name: SESSION_COOKIE_NAME,
     value: "",
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: isHttps,
     sameSite: "lax",
     path: "/",
     maxAge: 0,
