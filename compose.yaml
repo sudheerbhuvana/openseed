@@ -28,10 +28,8 @@ services:
       # Inbound seeding port (TCP & UDP)
       - "${SEEDING_PORT:-51413}:${SEEDING_PORT:-51413}/tcp"
       - "${SEEDING_PORT:-51413}:${SEEDING_PORT:-51413}/udp"
-      # qBittorrent WebUI (bound to 0.0.0.0 so you can access from your browser)
-      - "${QBIT_BIND_IP:-0.0.0.0}:${QBIT_WEBUI_PORT:-8080}:8080"
-      # Gluetun Control API (bound to localhost for security)
-      - "${GLUETUN_BIND_IP:-127.0.0.1}:${GLUETUN_CONTROL_PORT:-8000}:8000"
+      # qBittorrent WebUI
+      - "8080:8080"
     networks:
       - openseed-net
     healthcheck:
