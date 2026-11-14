@@ -44,10 +44,33 @@ class QBitClient {
     return process.env.QBIT_API_URL || "http://gluetun:8080";
   }
 
+  private getHeaders(cookie: string, extra?: Record<string, string>): Record<string, string> {
+    const headers: Record<string, string> = { ...extra };
+    if (cookie && cookie !== "BYPASS") {
+      headers["Cookie"] = cookie;
+    }
+    return headers;
+  }
+
   private async authenticate(): Promise<string> {
     const now = Date.now();
     if (this.cookie && now < this.cookieExpiry) {
       return this.cookie;
+    }
+
+    // 1. First probe if qBittorrent API is accessible without authentication (subnet whitelist / local auth disabled)
+    try {
+      const probeRes = await fetch(`${this.baseUrl}/api/v2/app/version`, {
+        cache: "no-store",
+        signal: AbortSignal.timeout(2000),
+      });
+      if (probeRes.ok) {
+        this.cookie = "BYPASS";
+        this.cookieExpiry = now + 60 * 60 * 1000;
+        return this.cookie;
+      }
+    } catch {
+      // Continue to try login
     }
 
     const username = process.env.QBIT_USERNAME || "admin";
@@ -55,37 +78,48 @@ class QBitClient {
 
     const body = new URLSearchParams({ username, password });
 
-    const res = await fetch(`${this.baseUrl}/api/v2/auth/login`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        Referer: this.baseUrl,
-      },
-      body: body.toString(),
-      cache: "no-store",
-    });
+    try {
+      const res = await fetch(`${this.baseUrl}/api/v2/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          Referer: this.baseUrl,
+        },
+        body: body.toString(),
+        cache: "no-store",
+        signal: AbortSignal.timeout(3000),
+      });
 
-    if (!res.ok) {
-      throw new Error(`Failed to login to qBittorrent: ${res.statusText}`);
+      if (!res.ok) {
+        console.warn(`[OpenSeed] qBittorrent login returned ${res.status} (${res.statusText}).`);
+        this.cookie = null;
+        return "";
+      }
+
+      const setCookie = res.headers.get("set-cookie");
+      if (!setCookie) {
+        this.cookie = "BYPASS";
+        this.cookieExpiry = now + 60 * 60 * 1000;
+        return this.cookie;
+      }
+
+      // Extract SID cookie
+      const sidMatch = setCookie.match(/SID=([^;]+)/);
+      this.cookie = sidMatch ? `SID=${sidMatch[1]}` : setCookie.split(";")[0];
+      this.cookieExpiry = now + 60 * 60 * 1000; // 1 hour cache
+      return this.cookie;
+    } catch (err: any) {
+      console.warn("[OpenSeed] qBittorrent login request error:", err?.message || err);
+      this.cookie = null;
+      return "";
     }
-
-    const setCookie = res.headers.get("set-cookie");
-    if (!setCookie) {
-      throw new Error("qBittorrent login succeeded but no cookie returned");
-    }
-
-    // Extract SID cookie
-    const sidMatch = setCookie.match(/SID=([^;]+)/);
-    this.cookie = sidMatch ? `SID=${sidMatch[1]}` : setCookie.split(";")[0];
-    this.cookieExpiry = now + 60 * 60 * 1000; // 1 hour cache
-    return this.cookie;
   }
 
   async getTorrents(): Promise<QBitTorrent[]> {
     try {
       const cookie = await this.authenticate();
       const res = await fetch(`${this.baseUrl}/api/v2/torrents/info`, {
-        headers: { Cookie: cookie },
+        headers: this.getHeaders(cookie),
         cache: "no-store",
       });
 
@@ -94,7 +128,7 @@ class QBitClient {
         this.cookie = null;
         const freshCookie = await this.authenticate();
         const retryRes = await fetch(`${this.baseUrl}/api/v2/torrents/info`, {
-          headers: { Cookie: freshCookie },
+          headers: this.getHeaders(freshCookie),
           cache: "no-store",
         });
         if (!retryRes.ok) return [];
@@ -174,7 +208,7 @@ class QBitClient {
 
     const res = await fetch(`${this.baseUrl}/api/v2/torrents/add`, {
       method: "POST",
-      headers: { Cookie: cookie },
+      headers: this.getHeaders(cookie),
       body: formData,
     });
 
@@ -198,19 +232,13 @@ class QBitClient {
     // Support modern qBittorrent /api/v2/torrents/stop with fallback to legacy /pause
     let res = await fetch(`${this.baseUrl}/api/v2/torrents/stop`, {
       method: "POST",
-      headers: {
-        Cookie: cookie,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
+      headers: this.getHeaders(cookie, { "Content-Type": "application/x-www-form-urlencoded" }),
       body: new URLSearchParams({ hashes: hash }).toString(),
     });
     if (!res.ok) {
       res = await fetch(`${this.baseUrl}/api/v2/torrents/pause`, {
         method: "POST",
-        headers: {
-          Cookie: cookie,
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
+        headers: this.getHeaders(cookie, { "Content-Type": "application/x-www-form-urlencoded" }),
         body: new URLSearchParams({ hashes: hash }).toString(),
       });
     }
@@ -222,19 +250,13 @@ class QBitClient {
     // Support modern qBittorrent /api/v2/torrents/start with fallback to legacy /resume
     let res = await fetch(`${this.baseUrl}/api/v2/torrents/start`, {
       method: "POST",
-      headers: {
-        Cookie: cookie,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
+      headers: this.getHeaders(cookie, { "Content-Type": "application/x-www-form-urlencoded" }),
       body: new URLSearchParams({ hashes: hash }).toString(),
     });
     if (!res.ok) {
       res = await fetch(`${this.baseUrl}/api/v2/torrents/resume`, {
         method: "POST",
-        headers: {
-          Cookie: cookie,
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
+        headers: this.getHeaders(cookie, { "Content-Type": "application/x-www-form-urlencoded" }),
         body: new URLSearchParams({ hashes: hash }).toString(),
       });
     }
@@ -245,10 +267,7 @@ class QBitClient {
     const cookie = await this.authenticate();
     const res = await fetch(`${this.baseUrl}/api/v2/torrents/delete`, {
       method: "POST",
-      headers: {
-        Cookie: cookie,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
+      headers: this.getHeaders(cookie, { "Content-Type": "application/x-www-form-urlencoded" }),
       body: new URLSearchParams({
         hashes: hash,
         deleteFiles: deleteFiles ? "true" : "false",
@@ -261,7 +280,7 @@ class QBitClient {
     try {
       const cookie = await this.authenticate();
       const res = await fetch(`${this.baseUrl}/api/v2/torrents/export?hash=${encodeURIComponent(hash)}`, {
-        headers: { Cookie: cookie },
+        headers: this.getHeaders(cookie),
       });
       if (!res.ok) return null;
       return await res.arrayBuffer();
@@ -278,8 +297,8 @@ class QBitClient {
       const cookie = await this.authenticate();
       // qBittorrent provides free space on download disk
       const [spaceRes, maindataRes] = await Promise.all([
-        fetch(`${this.baseUrl}/api/v2/app/defaultSavePath`, { headers: { Cookie: cookie }, cache: "no-store" }),
-        fetch(`${this.baseUrl}/api/v2/sync/maindata`, { headers: { Cookie: cookie }, cache: "no-store" }),
+        fetch(`${this.baseUrl}/api/v2/app/defaultSavePath`, { headers: this.getHeaders(cookie), cache: "no-store" }),
+        fetch(`${this.baseUrl}/api/v2/sync/maindata`, { headers: this.getHeaders(cookie), cache: "no-store" }),
       ]);
 
       const maindata = maindataRes.ok ? await maindataRes.json() : {};
@@ -304,7 +323,7 @@ class QBitClient {
     try {
       const cookie = await this.authenticate();
       const res = await fetch(`${this.baseUrl}/api/v2/sync/maindata`, {
-        headers: { Cookie: cookie },
+        headers: this.getHeaders(cookie),
         cache: "no-store",
       });
       if (!res.ok) return null;
@@ -333,7 +352,7 @@ class QBitClient {
     try {
       const cookie = await this.authenticate();
       const res = await fetch(`${this.baseUrl}/api/v2/sync/maindata`, {
-        headers: { Cookie: cookie },
+        headers: this.getHeaders(cookie),
         cache: "no-store",
       });
       if (!res.ok) {

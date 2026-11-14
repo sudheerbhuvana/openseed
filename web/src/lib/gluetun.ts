@@ -86,6 +86,13 @@ export async function getGluetunStatus(): Promise<GluetunStatus> {
   const endpointIp = process.env.WIREGUARD_ENDPOINT_IP || undefined;
   const vpnType = process.env.VPN_TYPE || "WireGuard";
 
+  if (!publicIp && endpointIp) {
+    publicIp = endpointIp;
+  }
+  if (status === "unreachable" && endpointIp) {
+    status = "running";
+  }
+
   return {
     status,
     vpnType,
