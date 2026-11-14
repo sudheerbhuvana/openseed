@@ -1,0 +1,117 @@
+networks:
+  openseed-net:
+    name: openseed-net
+    driver: bridge
+
+services:
+  gluetun:
+    image: qmcgaw/gluetun:latest
+    container_name: openseed-vpn
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      - VPN_SERVICE_PROVIDER=${VPN_SERVICE_PROVIDER:-custom}
+      - VPN_TYPE=${VPN_TYPE:-wireguard}
+      - WIREGUARD_ENDPOINT_IP=${WIREGUARD_ENDPOINT_IP}
+      - WIREGUARD_ENDPOINT_PORT=${WIREGUARD_ENDPOINT_PORT:-51820}
+      - WIREGUARD_PUBLIC_KEY=${WIREGUARD_PUBLIC_KEY}
+      - WIREGUARD_PRIVATE_KEY=${WIREGUARD_PRIVATE_KEY}
+      - WIREGUARD_PRESHARED_KEY=${WIREGUARD_PRESHARED_KEY}
+      - WIREGUARD_ADDRESSES=${WIREGUARD_ADDRESSES}
+      - FIREWALL_VPN_INPUT_PORTS=${SEEDING_PORT:-51413}
+      - TZ=${TZ:-UTC}
+    ports:
+      # Inbound seeding port (TCP & UDP)
+      - "${SEEDING_PORT:-51413}:${SEEDING_PORT:-51413}/tcp"
+      - "${SEEDING_PORT:-51413}:${SEEDING_PORT:-51413}/udp"
+      # qBittorrent WebUI (bound to localhost by default; set QBIT_BIND_IP=0.0.0.0 for LAN access)
+      - "${QBIT_BIND_IP:-127.0.0.1}:${QBIT_WEBUI_PORT:-8080}:8080"
+      # Gluetun Control API (bound to localhost for security)
+      - "${GLUETUN_BIND_IP:-127.0.0.1}:${GLUETUN_CONTROL_PORT:-8000}:8000"
+    networks:
+      - openseed-net
+    healthcheck:
+      test: ["CMD", "/gluetun-entrypoint", "healthcheck"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: openseed-qbit
+    restart: unless-stopped
+    network_mode: service:gluetun
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-UTC}
+      - WEBUI_PORT=8080
+      - TORRENTING_PORT=${SEEDING_PORT:-51413}
+    volumes:
+      - ${QBIT_CONFIG_DIR:-./data/qbittorrent}:/config
+      - ${ISOS_DIR:-./data/isos}:/data/isos
+    depends_on:
+      gluetun:
+        condition: service_healthy
+        restart: true
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: openseed-web
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - QBIT_API_URL=http://gluetun:8080
+      - GLUETUN_API_URL=${GLUETUN_API_URL:-http://gluetun:8000}
+      - QBIT_USERNAME=${QBIT_USERNAME:-admin}
+      - QBIT_PASSWORD=${QBIT_PASSWORD:-adminadmin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
+      - CRON_SECRET=${CRON_SECRET:-openseed_cron_secret}
+      - AUTO_SYNC_ENABLED=${AUTO_SYNC_ENABLED:-true}
+      - AUTO_SYNC_INTERVAL_HOURS=${AUTO_SYNC_INTERVAL_HOURS:-6}
+      - MAX_VERSIONS_PER_DISTRO=${MAX_VERSIONS_PER_DISTRO:-3}
+      - MAX_DISK_PERCENT_LIMIT=${MAX_DISK_PERCENT_LIMIT:-90}
+      - MIN_RATIO_BEFORE_PRUNE=${MIN_RATIO_BEFORE_PRUNE:-1.0}
+      - NEXT_PUBLIC_APP_NAME=${NEXT_PUBLIC_APP_NAME:-OpenSeed}
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    volumes:
+      - ${WEB_DATA_DIR:-./data/web}:/app/data
+    networks:
+      - openseed-net
+    depends_on:
+      gluetun:
+        condition: service_healthy
+
+  cron:
+    image: alpine:latest
+    container_name: openseed-cron
+    restart: unless-stopped
+    networks:
+      - openseed-net
+    environment:
+      - CRON_SECRET=${CRON_SECRET:-openseed_cron_secret}
+      - CRON_INTERVAL_HOURS=${AUTO_SYNC_INTERVAL_HOURS:-6}
+    command: >
+      sh -c '
+        echo "Installing curl..." &&
+        apk add --no-cache curl &&
+        echo "OpenSeed automated distro release sync daemon started (Checking every $${CRON_INTERVAL_HOURS:-6} hours)..." &&
+        while true; do
+          sleep 30
+          echo "[OpenSeed Cron] Triggering release check..."
+          curl -s -X POST -H "Authorization: Bearer $${CRON_SECRET:-openseed_cron_secret}" http://web:3000/api/cron/sync || true
+          echo ""
+          sleep $$(($${CRON_INTERVAL_HOURS:-6} * 3600))
+        done
+      '
+    depends_on:
+      - web
+
