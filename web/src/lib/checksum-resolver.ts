@@ -171,7 +171,7 @@ export const DISTRO_CONFIGS: Record<string, DistroUpstreamConfig> = {
     name: "Fedora 41",
     version: "Workstation 41 Live",
     architecture: "x86_64",
-    fileNamePattern: /SHA256\s*\((Fedora-Workstation-Live-x86_64-41[^\)]*\.iso)\)\s*=\s*([a-f0-9]{64})/i,
+    fileNamePattern: /SHA256\s*\((Fedora-Workstation-Live-x86_64-\d+[^\)]*)\)\s*=\s*([a-f0-9]{64})/i,
     targetFileName: "Fedora-Workstation-Live-x86_64-41-1.4.iso",
     checksumSourceType: "fedora-checksum",
     checksumFileUrl: "https://download.fedoraproject.org/pub/fedora/linux/releases/41/Workstation/x86_64/iso/Fedora-Workstation-41-1.4-x86_64-CHECKSUM",
@@ -284,6 +284,11 @@ export const DISTRO_CONFIGS: Record<string, DistroUpstreamConfig> = {
 };
 
 // Aliases for historical / track IDs
+DISTRO_CONFIGS["fedora"] = DISTRO_CONFIGS["fedora-workstation"] = DISTRO_CONFIGS["fedora-41-workstation"];
+DISTRO_CONFIGS["linux-mint"] = DISTRO_CONFIGS["linux-mint-22"];
+DISTRO_CONFIGS["kali-linux"] = DISTRO_CONFIGS["kali-linux-2024"];
+DISTRO_CONFIGS["proxmox-ve"] = DISTRO_CONFIGS["proxmox-ve-92"];
+DISTRO_CONFIGS["proxmox-ve-arm64"] = DISTRO_CONFIGS["proxmox-ve-92-arm64"];
 DISTRO_CONFIGS["proxmox-ve-8"] = DISTRO_CONFIGS["proxmox-ve-92"];
 DISTRO_CONFIGS["proxmox-ve-8-arm64"] = DISTRO_CONFIGS["proxmox-ve-92-arm64"];
 DISTRO_CONFIGS["proxmox-pbs"] = DISTRO_CONFIGS["proxmox-pbs-42"];

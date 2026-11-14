@@ -67,9 +67,11 @@ let inFlightPromise: Promise<NodeStatsResult> | null = null;
 export async function getNodeStats(forceLive = false): Promise<NodeStatsResult> {
   const now = Date.now();
   const snapshot = getNodeStatsSnapshot();
+  const isStaleEmpty = snapshot && snapshot.summary.totalTorrents === 0;
+  const effectiveTtl = isStaleEmpty ? 15000 : STATS_CACHE_TTL_MS;
 
-  // If not forcing live and snapshot is fresh (< 5 mins), return SQLite cache immediately
-  if (!forceLive && snapshot && now - snapshot.updatedAt < STATS_CACHE_TTL_MS) {
+  // If not forcing live and snapshot is fresh, return SQLite cache immediately
+  if (!forceLive && snapshot && now - snapshot.updatedAt < effectiveTtl) {
     const ageSeconds = Math.floor((now - snapshot.updatedAt) / 1000);
     const nextRefreshInSeconds = Math.max(0, 300 - ageSeconds);
 

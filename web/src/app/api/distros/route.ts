@@ -36,9 +36,13 @@ export async function GET() {
     }
 
     // 3. Assemble monitored distros matrix with 100% dynamic upstream values
+    const matchedHashes = new Set<string>();
     const monitored = CURATED_SEED_CATALOG.map((item) => {
       const dbInfo = dbMap.get(item.id);
       const matchedTorrent = matchTorrentToCatalog(item, torrents);
+      if (matchedTorrent) {
+        matchedHashes.add(matchedTorrent.hash);
+      }
       const display = resolveDynamicDistroDisplay(item, matchedTorrent, dbInfo);
 
       return {
@@ -86,6 +90,52 @@ export async function GET() {
           : null,
       };
     });
+
+    // Also append any active cluster torrents that were not in the static curated catalog
+    const extraTorrents = torrents.filter((t) => !matchedHashes.has(t.hash));
+    for (const extra of extraTorrents) {
+      const isArm = extra.name.toLowerCase().includes("arm");
+      monitored.push({
+        id: `cluster-${extra.hash}`,
+        name: extra.name.replace(".iso", "").replace(".torrent", ""),
+        category: "linux",
+        version: "Active Cluster Torrent",
+        architecture: isArm ? "arm64" : "amd64",
+        nominalSize: extra.size,
+        description: "Distribution actively verified and seeded by your cluster.",
+        targetFileName: extra.name,
+        releaseDate: "Cluster Active",
+        officialUrl: "",
+        officialMagnet: extra.magnet_uri || "",
+        detectedVersion: null,
+        checksum: {
+          type: "SHA-256",
+          value: null,
+          sourceUrl: null,
+          gpgUrl: null,
+          releaseNotesUrl: null,
+          installGuideUrl: null,
+          upstreamUrl: "",
+          lastSyncedAt: null,
+          isDynamicUpstream: false,
+        },
+        torrent: {
+          hash: extra.hash,
+          name: extra.name,
+          state: extra.state,
+          progress: extra.progress,
+          size: extra.size,
+          uploaded: extra.uploaded,
+          downloaded: extra.downloaded,
+          ratio: extra.ratio,
+          dlspeed: extra.dlspeed,
+          upspeed: extra.upspeed,
+          numSeeds: extra.num_seeds,
+          numLeechs: extra.num_leechs,
+          magnetUri: extra.magnet_uri,
+        },
+      });
+    }
 
     const activeSeedingCount = monitored.filter((m) => {
       const state = m.torrent?.state.toLowerCase() || "";

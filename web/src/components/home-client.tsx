@@ -111,11 +111,13 @@ export default function HomeClient({ initialStats }: HomeClientProps) {
 
   const processedItems = useMemo(() => {
     const liveTorrents = data?.torrents || [];
+    const matchedHashes = new Set<string>();
 
-    return CURATED_SEED_CATALOG.map((catalog) => {
+    const items = CURATED_SEED_CATALOG.map((catalog) => {
       const matched = matchTorrentToCatalog(catalog, liveTorrents);
 
       if (matched) {
+        matchedHashes.add(matched.hash);
         const status = resolveDistroStatus(matched);
         const dynamicDisplay = resolveDynamicDistroDisplay(catalog, matched);
 
@@ -152,6 +154,35 @@ export default function HomeClient({ initialStats }: HomeClientProps) {
         isLive: false,
       };
     });
+
+    // Also include any active torrents currently seeded in qBittorrent that weren't in static catalog
+    const extraTorrents = liveTorrents.filter((t) => !matchedHashes.has(t.hash));
+    for (const extra of extraTorrents) {
+      const isArm = extra.name.toLowerCase().includes("arm");
+      items.push({
+        id: `cluster-${extra.hash}`,
+        name: extra.name.replace(".iso", "").replace(".torrent", ""),
+        category: "linux",
+        version: "Cluster Distribution",
+        architecture: (isArm ? "arm64" : "x86_64") as "arm64" | "x86_64",
+        nominalSize: extra.size,
+        size: extra.size,
+        uploaded: extra.uploaded,
+        ratio: extra.ratio,
+        progress: extra.progress,
+        dlspeed: extra.dlspeed,
+        upspeed: extra.upspeed,
+        magnet: extra.magnet_uri || "",
+        officialMagnet: extra.magnet_uri || "",
+        officialUrl: "",
+        hash: extra.hash,
+        targetFileName: extra.name,
+        status: resolveDistroStatus(extra),
+        isLive: true,
+      });
+    }
+
+    return items;
   }, [data]);
 
   const filteredItems = useMemo(() => {
@@ -170,61 +201,8 @@ export default function HomeClient({ initialStats }: HomeClientProps) {
   const totalUploadedBytes = data?.summary?.totalUploadedBytes ?? 0;
 
   return (
-    <div className="flex flex-col gap-10 w-full pb-20">
-      {/* 1. Hero Section: Clean & Minimal */}
-      <div className="flex flex-col items-center text-center pt-6 pb-2 gap-4">
-        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight text-foreground leading-tight">
-          OpenSeed
-        </h1>
-
-        <p className="text-sm sm:text-base text-zinc-500 dark:text-zinc-400 max-w-lg">
-          Continuous BitTorrent seeding for Linux distributions and hypervisors.
-        </p>
-
-        {/* Real Live Metric Counters */}
-        <div id="telemetry" className="mt-3 flex flex-wrap items-center justify-center gap-8 sm:gap-14 text-center">
-          <div>
-            <div className="text-2xl sm:text-3xl font-black text-foreground tracking-tight h-9 flex items-center justify-center">
-              {loading && !data ? (
-                <div className="h-7 w-24 bg-secondary rounded animate-pulse" />
-              ) : (
-                formatBytes(totalUploadedBytes)
-              )}
-            </div>
-            <div className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mt-1">
-              Contributed Bandwidth
-            </div>
-          </div>
-
-          <div className="h-8 w-px bg-border hidden sm:block" />
-
-          <div>
-            <div className="text-2xl sm:text-3xl font-black text-emerald-500 tracking-tight h-9 flex items-center justify-center">
-              {data?.summary?.activeSeeding ?? 0}
-            </div>
-            <div className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mt-1">
-              Active Seeding
-            </div>
-          </div>
-
-          <div className="h-8 w-px bg-border hidden sm:block" />
-
-          <div>
-            <div className="text-2xl sm:text-3xl font-black text-foreground tracking-tight h-9 flex items-center justify-center">
-              {CURATED_SEED_CATALOG.length}
-            </div>
-            <div className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mt-1">
-              Monitored Distros
-            </div>
-          </div>
-        </div>
-
-        <div className="text-[11px] text-zinc-400 dark:text-zinc-500 font-medium">
-          Node telemetry snapshot synced every 5 minutes
-        </div>
-      </div>
-
-      {/* 2. Search & Category / Architecture Filters */}
+    <div className="flex flex-col gap-6 w-full pt-4 sm:pt-6 pb-20">
+      {/* 1. Search & Category / Architecture Filters */}
       <div id="distributions" className="flex flex-col xl:flex-row items-center justify-between gap-4 bg-card border border-border p-3 rounded-2xl shadow-sm">
         <div className="flex items-center gap-3 px-3 w-full xl:w-96">
           <Search className="size-4 text-zinc-500 shrink-0" />

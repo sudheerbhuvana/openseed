@@ -143,7 +143,7 @@ export const CURATED_SEED_CATALOG: CatalogItem[] = [
     description: "Lightweight and flexible rolling Linux distribution with Pacman, systemd, and cutting-edge software.",
   },
   {
-    id: "fedora-41-workstation",
+    id: "fedora-workstation",
     name: "Fedora Workstation",
     category: "linux",
     version: "Workstation Live • Leading Edge",
@@ -156,7 +156,7 @@ export const CURATED_SEED_CATALOG: CatalogItem[] = [
     description: "Leading-edge developer and workstation platform featuring GNOME, Wayland, and DNF5 package management.",
   },
   {
-    id: "linux-mint-22",
+    id: "linux-mint",
     name: "Linux Mint",
     category: "linux",
     version: "Cinnamon Edition • Desktop",
@@ -169,7 +169,7 @@ export const CURATED_SEED_CATALOG: CatalogItem[] = [
     description: "Modern, polished desktop Linux distribution built on Ubuntu LTS foundation with Cinnamon desktop.",
   },
   {
-    id: "kali-linux-2024",
+    id: "kali-linux",
     name: "Kali Linux",
     category: "security",
     version: "Installer Live • Security Auditing",
@@ -182,20 +182,7 @@ export const CURATED_SEED_CATALOG: CatalogItem[] = [
     description: "The premier advanced penetration testing and security auditing Linux distribution maintained by OffSec.",
   },
   {
-    id: "alpine-linux",
-    name: "Alpine Linux",
-    category: "linux",
-    version: "Standard • Minimal Musl/Busybox",
-    architecture: "x86_64",
-    nominalSize: 220000000,
-    releaseDate: "Stable Release",
-    officialMagnet: "https://alpinelinux.org/downloads/",
-    officialUrl: "https://alpinelinux.org/downloads/",
-    targetFileName: "alpine-standard-x86_64.iso",
-    description: "Ultra-compact, security-oriented Linux distro based on musl libc and busybox, designed for routers and containers.",
-  },
-  {
-    id: "proxmox-ve-92",
+    id: "proxmox-ve",
     name: "Proxmox VE",
     category: "hypervisor",
     version: "Virtual Environment (x86_64)",
@@ -208,7 +195,7 @@ export const CURATED_SEED_CATALOG: CatalogItem[] = [
     description: "Complete open-source enterprise virtualization platform combining KVM hypervisor and LXC containers.",
   },
   {
-    id: "proxmox-ve-92-arm64",
+    id: "proxmox-ve-arm64",
     name: "Proxmox VE (ARM64)",
     category: "hypervisor",
     version: "Virtual Environment (ARM64)",
@@ -221,7 +208,7 @@ export const CURATED_SEED_CATALOG: CatalogItem[] = [
     description: "Native 64-bit ARM enterprise virtualization stack for ARM-based servers and enterprise clusters.",
   },
   {
-    id: "proxmox-pbs-42",
+    id: "proxmox-pbs",
     name: "Proxmox Backup Server",
     category: "hypervisor",
     version: "PBS • Enterprise Deduplicating Backup",
@@ -234,7 +221,7 @@ export const CURATED_SEED_CATALOG: CatalogItem[] = [
     description: "Enterprise deduplicating backup solution supporting incremental, verified, and encrypted backups for VMs.",
   },
   {
-    id: "proxmox-pdm-11",
+    id: "proxmox-pdm",
     name: "Proxmox Datacenter Manager",
     category: "hypervisor",
     version: "PDM • Multi-Cluster Central UI",
@@ -305,26 +292,23 @@ export function matchTorrentToCatalog(catalogItem: CatalogItem, torrents: QBitTo
     if (id === "arch-linux-current") {
       return tName.includes("arch");
     }
-    if (id === "fedora-41-workstation") {
+    if (id.includes("fedora")) {
       return tName.includes("fedora");
     }
-    if (id === "linux-mint-22") {
+    if (id.includes("mint")) {
       return tName.includes("mint");
     }
-    if (id === "kali-linux-2024") {
+    if (id.includes("kali")) {
       return tName.includes("kali");
     }
     if (id.includes("proxmox-ve")) {
       return tName.includes("proxmox-ve") || tName.includes("pve");
     }
-    if (id.includes("proxmox-pbs")) {
+    if (id.includes("proxmox-pbs") || id.includes("backup")) {
       return tName.includes("proxmox-backup") || tName.includes("pbs");
     }
-    if (id.includes("proxmox-pdm")) {
+    if (id.includes("proxmox-pdm") || id.includes("datacenter")) {
       return tName.includes("datacenter") || tName.includes("pdm");
-    }
-    if (id === "alpine-linux") {
-      return tName.includes("alpine");
     }
 
     return false;

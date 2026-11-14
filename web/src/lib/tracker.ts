@@ -67,23 +67,35 @@ export async function resolveDistroReleases(source: DistroSource): Promise<Resol
 
       for (const match of torrentUrlMatches) {
         const url = match[1];
-        // Focus on production LTS releases (e.g. 24.04 LTS), skip daily pre-releases if possible
         if (targetPattern.test(url) && !seenUrls.has(url)) {
           seenUrls.add(url);
           const fileName = url.split("/").pop() || source.name;
+          const verMatch = fileName.match(/ubuntu-(\d+\.\d+)/i);
+          const verTag = verMatch ? verMatch[1] : "";
+          const is2404 = verTag.startsWith("24");
+          const ltsSuffix = is2404 ? " LTS" : "";
+          const friendlyName = verTag
+            ? source.name.replace("Ubuntu ", `Ubuntu ${verTag}${ltsSuffix} `)
+            : source.name;
+          const releaseId = verTag
+            ? `${source.id}-${verTag.replace(".", "")}`
+            : `${source.id}-${releases.length}`;
+
           releases.push({
-            id: source.id,
-            name: `${source.name} (${fileName.replace(".torrent", "").replace(".iso", "")})`,
+            id: releaseId,
+            name: friendlyName,
             category: source.category,
-            description: source.description,
+            description: is2404
+              ? `Canonical long-term enterprise production release with multi-year security maintenance.`
+              : source.description,
             architecture: source.architecture,
             torrentUrl: url,
             versionName: fileName.replace(".torrent", ""),
             detectedAt: new Date().toISOString(),
           });
 
-          // Limit to the primary LTS release per category
-          if (releases.length >= 1) break;
+          // Track both modern 26.04 release and active 24.04 LTS release
+          if (releases.length >= 2) break;
         }
       }
       return releases;
@@ -117,7 +129,7 @@ export async function resolveDistroReleases(source: DistroSource): Promise<Resol
             const fileName = rawUrl.split("/").pop() || "linuxmint-cinnamon-64bit.iso";
             releases.push({
               id: source.id,
-              name: `${source.name} (${fileName.replace(".torrent", "").replace(".iso", "")})`,
+              name: source.name,
               category: source.category,
               description: source.description,
               architecture: source.architecture,
@@ -220,7 +232,7 @@ export async function resolveDistroReleases(source: DistroSource): Promise<Resol
         const formattedVersionName = vName.endsWith(".iso") ? vName : `${vName}.iso`;
         releases.push({
           id: source.id,
-          name: `${source.name} (${formattedVersionName.replace(".iso", "")})`,
+          name: source.name,
           category: source.category,
           description: source.description,
           architecture: source.architecture,

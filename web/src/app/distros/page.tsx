@@ -4,7 +4,6 @@ import { useState, useEffect, useMemo } from "react";
 import { useTheme } from "next-themes";
 import { getDistroLogo } from "@/lib/metadata";
 import { formatBytes } from "@/lib/utils";
-import { CURATED_SEED_CATALOG } from "@/lib/catalog";
 import { Search, ExternalLink, RefreshCw, X } from "lucide-react";
 
 interface DistroRow {
@@ -21,17 +20,6 @@ interface DistroRow {
     size: number;
   } | null;
 }
-
-const INITIAL_DISTROS: DistroRow[] = CURATED_SEED_CATALOG.map((c) => ({
-  id: c.id,
-  name: c.name,
-  category: c.category,
-  version: c.version,
-  architecture: c.architecture,
-  nominalSize: c.nominalSize,
-  officialUrl: c.officialUrl,
-  torrent: null,
-}));
 
 function getStatusInfo(torrent: DistroRow["torrent"]) {
   if (!torrent) {
@@ -79,7 +67,8 @@ function getStatusInfo(torrent: DistroRow["torrent"]) {
 export default function MonitoredDistrosPage() {
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
-  const [distros, setDistros] = useState<DistroRow[]>(INITIAL_DISTROS);
+  const [distros, setDistros] = useState<DistroRow[]>([]);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
 
@@ -90,11 +79,12 @@ export default function MonitoredDistrosPage() {
 
   const fetchDistros = async (isManual = false) => {
     if (isManual) setRefreshing(true);
+    else setLoading(true);
     try {
       const res = await fetch("/api/distros");
       if (res.ok) {
         const json = await res.json();
-        if (Array.isArray(json.distros) && json.distros.length > 0) {
+        if (Array.isArray(json.distros)) {
           setDistros(json.distros);
         }
       }
@@ -102,6 +92,7 @@ export default function MonitoredDistrosPage() {
       console.error("Failed to fetch distros:", err);
     } finally {
       setRefreshing(false);
+      setLoading(false);
     }
   };
 
@@ -184,81 +175,102 @@ export default function MonitoredDistrosPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {filteredDistros.map((distro) => {
-                const logoPath = getDistroLogo(distro.name, activeTheme || "dark");
+              {loading && distros.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-12 text-center text-zinc-500">
+                    <div className="inline-flex items-center gap-2 text-xs font-medium">
+                      <RefreshCw className="size-4 animate-spin text-zinc-400" />
+                      <span>Loading cluster distributions...</span>
+                    </div>
+                  </td>
+                </tr>
+              ) : filteredDistros.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-12 text-center text-zinc-500 text-xs">
+                    No distributions found matching "{search}".
+                  </td>
+                </tr>
+              ) : (
+                filteredDistros.map((distro) => {
+                  const logoPath = getDistroLogo(distro.name, activeTheme || "dark");
 
-                return (
-                  <tr key={distro.id} className="hover:bg-secondary/40 transition-colors">
-                    {/* Distribution Logo & Name */}
-                    <td className="py-3.5 px-4">
-                      <div className="flex items-center gap-3">
-                        <div className="size-7 rounded-md bg-secondary border border-border flex items-center justify-center p-1 shrink-0">
-                          <img
-                            src={logoPath}
-                            alt={distro.name}
-                            width={20}
-                            height={20}
-                            className="size-5 object-contain"
-                          />
-                        </div>
-                        <span className="font-semibold text-foreground text-xs sm:text-sm">
-                          {distro.name}
-                        </span>
-                      </div>
-                    </td>
-
-                    {/* Version / Flavor */}
-                    <td className="py-3.5 px-4 text-zinc-600 dark:text-zinc-300">
-                      {distro.version}
-                    </td>
-
-                    {/* Architecture */}
-                    <td className="py-3.5 px-4">
-                      <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-secondary border border-border text-zinc-600 dark:text-zinc-300">
-                        {distro.architecture}
-                      </span>
-                    </td>
-
-                    {/* Category */}
-                    <td className="py-3.5 px-4 capitalize text-zinc-500">
-                      {distro.category}
-                    </td>
-
-                    {/* Size */}
-                    <td className="py-3.5 px-4 text-zinc-600 dark:text-zinc-300 font-medium">
-                      {formatBytes(distro.torrent?.size || distro.nominalSize)}
-                    </td>
-
-                    {/* Status */}
-                    <td className="py-3.5 px-4 whitespace-nowrap">
-                      {(() => {
-                        const statusInfo = getStatusInfo(distro.torrent);
-                        return (
-                          <span
-                            className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${statusInfo.badgeClass}`}
-                          >
-                            <span className={`size-1.5 rounded-full ${statusInfo.dotClass}`} />
-                            {statusInfo.label}
+                  return (
+                    <tr key={distro.id} className="hover:bg-secondary/40 transition-colors">
+                      {/* Distribution Logo & Name */}
+                      <td className="py-3.5 px-4">
+                        <div className="flex items-center gap-3">
+                          <div className="size-7 rounded-md bg-secondary border border-border flex items-center justify-center p-1 shrink-0">
+                            <img
+                              src={logoPath}
+                              alt={distro.name}
+                              width={20}
+                              height={20}
+                              className="size-5 object-contain"
+                            />
+                          </div>
+                          <span className="font-semibold text-foreground text-xs sm:text-sm">
+                            {distro.name}
                           </span>
-                        );
-                      })()}
-                    </td>
+                        </div>
+                      </td>
 
-                    {/* Official Site */}
-                    <td className="py-3.5 px-4 text-right">
-                      <a
-                        href={distro.officialUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs text-zinc-400 hover:text-foreground transition font-medium"
-                      >
-                        <span>Visit</span>
-                        <ExternalLink className="size-3" />
-                      </a>
-                    </td>
-                  </tr>
-                );
-              })}
+                      {/* Version / Flavor */}
+                      <td className="py-3.5 px-4 text-zinc-600 dark:text-zinc-300">
+                        {distro.version}
+                      </td>
+
+                      {/* Architecture */}
+                      <td className="py-3.5 px-4">
+                        <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-secondary border border-border text-zinc-600 dark:text-zinc-300">
+                          {distro.architecture}
+                        </span>
+                      </td>
+
+                      {/* Category */}
+                      <td className="py-3.5 px-4 capitalize text-zinc-500">
+                        {distro.category}
+                      </td>
+
+                      {/* Size */}
+                      <td className="py-3.5 px-4 text-zinc-600 dark:text-zinc-300 font-medium">
+                        {formatBytes(distro.torrent?.size || distro.nominalSize)}
+                      </td>
+
+                      {/* Status */}
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        {(() => {
+                          const statusInfo = getStatusInfo(distro.torrent);
+                          return (
+                            <span
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${statusInfo.badgeClass}`}
+                            >
+                              <span className={`size-1.5 rounded-full ${statusInfo.dotClass}`} />
+                              {statusInfo.label}
+                            </span>
+                          );
+                        })()}
+                      </td>
+
+                      {/* Official Site */}
+                      <td className="py-3.5 px-4 text-right">
+                        {distro.officialUrl ? (
+                          <a
+                            href={distro.officialUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-xs text-zinc-400 hover:text-foreground transition font-medium"
+                          >
+                            <span>Visit</span>
+                            <ExternalLink className="size-3" />
+                          </a>
+                        ) : (
+                          <span className="text-xs text-zinc-500">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>

@@ -4,7 +4,8 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { Menu, X, Disc, Info, Activity, ExternalLink, Home } from "lucide-react";
+import { formatBytes } from "@/lib/utils";
+import { Menu, X, Disc, Info, ExternalLink, Home } from "lucide-react";
 
 function GithubIcon({ className = "size-4" }: { className?: string }) {
   return (
@@ -20,6 +21,11 @@ function GithubIcon({ className = "size-4" }: { className?: string }) {
 
 export function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [stats, setStats] = useState<{
+    activeSeeding: number;
+    totalUploaded: number;
+    totalTorrents: number;
+  } | null>(null);
   const pathname = usePathname();
 
   // Close mobile menu on route change
@@ -27,11 +33,38 @@ export function Navbar() {
     setMobileMenuOpen(false);
   }, [pathname]);
 
+  // Periodic lightweight live node telemetry fetching for sticky header
+  useEffect(() => {
+    let isMounted = true;
+    const fetchStats = async () => {
+      try {
+        const res = await fetch("/api/stats");
+        if (res.ok && isMounted) {
+          const data = await res.json();
+          setStats({
+            activeSeeding: data?.summary?.activeSeeding ?? 0,
+            totalUploaded: data?.summary?.totalUploadedBytes ?? 0,
+            totalTorrents: data?.summary?.totalTorrents ?? data?.torrents?.length ?? 0,
+          });
+        }
+      } catch {
+        // Silently ignore network hiccups
+      }
+    };
+
+    fetchStats();
+    const timer = setInterval(fetchStats, 15000);
+    return () => {
+      isMounted = false;
+      clearInterval(timer);
+    };
+  }, []);
+
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background/85 backdrop-blur-xl">
-      <div className="w-full px-4 sm:px-8 lg:px-16 2xl:px-20 h-16 flex items-center justify-between">
-        {/* Brand Logo */}
-        <div className="flex items-center gap-3">
+      <div className="w-full px-4 sm:px-8 lg:px-12 2xl:px-16 h-16 flex items-center justify-between gap-4">
+        {/* Left: Brand Logo */}
+        <div className="flex items-center gap-3 shrink-0">
           <Link href="/" className="flex items-center gap-2.5 group">
             <img
               src="/logos/openseed.png"
@@ -46,8 +79,35 @@ export function Navbar() {
           </Link>
         </div>
 
-        {/* Desktop Navigation & Controls */}
-        <div className="hidden md:flex items-center gap-5">
+        {/* Center: Live Cluster Telemetry Stats (Clean, prominent inline typography) */}
+        {stats && (
+          <div className="hidden md:flex items-center gap-5 text-sm lg:text-base select-none">
+            <div className="flex items-center gap-2 font-bold text-emerald-500">
+              <span className="relative flex size-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full size-2.5 bg-emerald-500" />
+              </span>
+              <span>{stats.activeSeeding} Active Seeding</span>
+            </div>
+
+            <span className="text-zinc-400 dark:text-zinc-600 text-base font-bold">·</span>
+
+            <div className="flex items-center gap-1.5 text-zinc-600 dark:text-zinc-300 font-medium">
+              <span className="text-zinc-500 dark:text-zinc-400">Contributed:</span>
+              <span className="font-extrabold text-foreground">{formatBytes(stats.totalUploaded)}</span>
+            </div>
+
+            <span className="text-zinc-400 dark:text-zinc-600 text-base font-bold">·</span>
+
+            <div className="flex items-center gap-1.5 text-zinc-600 dark:text-zinc-300 font-medium">
+              <span className="font-extrabold text-foreground">{stats.totalTorrents}</span>
+              <span className="text-zinc-500 dark:text-zinc-400">Distros</span>
+            </div>
+          </div>
+        )}
+
+        {/* Right: Desktop Navigation & Controls */}
+        <div className="hidden md:flex items-center gap-4 shrink-0">
           <Link
             href="/distros"
             className={`text-sm font-medium transition-colors ${
@@ -68,28 +128,31 @@ export function Navbar() {
           >
             About
           </Link>
-          <Link
-            href="/#telemetry"
-            className="text-sm font-medium text-zinc-600 dark:text-zinc-300 hover:text-foreground transition-colors"
-          >
-            Telemetry
-          </Link>
-
           <a
             href="https://github.com/sudheerbhuvana/openseed"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center text-zinc-600 dark:text-zinc-300 hover:text-foreground transition-colors"
+            className="inline-flex items-center text-zinc-600 dark:text-zinc-300 hover:text-foreground transition-colors p-1"
             aria-label="GitHub Repository"
           >
             <GithubIcon className="size-4" />
           </a>
-
           <ThemeToggle />
         </div>
 
-        {/* Mobile Header Controls: Theme Toggle + Hamburger Menu Button */}
+        {/* Mobile Header Controls */}
         <div className="flex md:hidden items-center gap-2">
+          {stats && (
+            <div className="flex items-center gap-1.5 text-xs font-semibold select-none pr-1">
+              <span className="flex items-center gap-1 text-emerald-500">
+                <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span>{stats.activeSeeding}</span>
+              </span>
+              <span className="text-zinc-400 dark:text-zinc-600 font-bold">·</span>
+              <span className="text-foreground font-bold">{formatBytes(stats.totalUploaded)}</span>
+            </div>
+          )}
+
           <ThemeToggle />
 
           <button
@@ -107,6 +170,23 @@ export function Navbar() {
       {/* Mobile Navigation Drawer / Dropdown */}
       {mobileMenuOpen && (
         <div className="md:hidden border-t border-border bg-background/98 backdrop-blur-2xl shadow-2xl">
+          {stats && (
+            <div className="px-5 pt-4 pb-2 grid grid-cols-3 gap-2 text-center border-b border-border/60">
+              <div className="p-2 rounded-xl bg-secondary/50 border border-border/50">
+                <div className="text-xs font-bold text-emerald-500">{stats.activeSeeding}</div>
+                <div className="text-[10px] text-zinc-500 font-medium">Seeding</div>
+              </div>
+              <div className="p-2 rounded-xl bg-secondary/50 border border-border/50">
+                <div className="text-xs font-bold text-foreground">{formatBytes(stats.totalUploaded)}</div>
+                <div className="text-[10px] text-zinc-500 font-medium">Contributed</div>
+              </div>
+              <div className="p-2 rounded-xl bg-secondary/50 border border-border/50">
+                <div className="text-xs font-bold text-foreground">{stats.totalTorrents}</div>
+                <div className="text-[10px] text-zinc-500 font-medium">Distros</div>
+              </div>
+            </div>
+          )}
+
           <div className="px-5 py-4 flex flex-col gap-2">
             <Link
               href="/"
@@ -145,15 +225,6 @@ export function Navbar() {
             >
               <Info className="size-4.5 opacity-80" />
               <span>About & Infrastructure</span>
-            </Link>
-
-            <Link
-              href="/#telemetry"
-              onClick={() => setMobileMenuOpen(false)}
-              className="flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-semibold text-foreground hover:bg-secondary/70 transition-colors"
-            >
-              <Activity className="size-4.5 opacity-80" />
-              <span>Bandwidth Telemetry</span>
             </Link>
 
             <div className="pt-2 border-t border-border mt-1">
