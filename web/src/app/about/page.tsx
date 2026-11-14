@@ -34,26 +34,23 @@ export default function AboutPage() {
         </p>
 
         <h2 className="text-xl font-bold tracking-tight text-foreground pt-4">
-          Why I built this
+          Why OpenSeed exists
         </h2>
         <p>
-          Every time a major Linux distribution drops a new release — whether it&apos;s Ubuntu LTS, a new Debian point release, or Arch&apos;s monthly rolling ISO — their central download mirrors get hammered with terabytes of traffic. Direct HTTP downloads cost non-profit foundations real bandwidth money.
+          Whenever a major Linux distribution or hypervisor drops a new release, official download mirrors slow down under heavy traffic. Direct HTTP downloads cost open-source foundations substantial bandwidth and infrastructure fees.
         </p>
         <p>
-          BitTorrent is the most efficient, decentralized way to distribute large operating system images. OpenSeed exists to keep those swarms healthy, fast, and available 24/7, especially for older or specialized versions that might otherwise lose seeders.
+          BitTorrent is the most efficient, decentralized way to distribute large operating system images. OpenSeed exists to keep those swarms healthy, fast, and available 24/7, especially for architecture-specific builds like 64-bit ARM that often lack active seeders.
         </p>
 
         <h2 className="text-xl font-bold tracking-tight text-foreground pt-4">
-          How it runs in my homelab
+          Architecture & Networking
         </h2>
         <p>
-          Everything is self-hosted on my local server cluster.
+          OpenSeed is packaged as a clean Docker Compose stack that can run on any home server, NAS, or virtual machine.
         </p>
         <p>
-          For torrenting, all peer traffic is isolated through a <strong>Gluetun WireGuard tunnel</strong> connected to an <strong>Oracle Cloud VPS</strong>. This handles high-bandwidth peer ingress and egress securely without exposing my home IP address.
-        </p>
-        <p>
-          For the web dashboard and live telemetry, the site is published using a secure <strong>Cloudflare Tunnel</strong> (<code className="text-xs font-mono bg-secondary px-1.5 py-0.5 rounded">cloudflared</code>). That gives it edge caching, DDoS protection, and SSL with zero open ports forwarded on my home router.
+          All BitTorrent swarm traffic is isolated through an encrypted <strong>WireGuard VPN tunnel</strong> with a strict kernel-level firewall killswitch. This routes high-bandwidth peer ingress and egress securely without exposing home IP addresses or requiring inbound port forwarding on local routers.
         </p>
 
         <h2 className="text-xl font-bold tracking-tight text-foreground pt-4">
